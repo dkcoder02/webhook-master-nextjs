@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client/extension";
+import { PrismaClient } from "@prisma/client";
 
 //TODO: this type of configuration used in ai-saas product and read more postgres-db-prima asscrerat
 
