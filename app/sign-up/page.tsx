@@ -150,7 +150,7 @@ function SignUpPage() {
                             {errors && (
                                 errors.map((el, index) => (
                                     <Alert variant="destructive">
-                                        <AlertDescription>{el.longMessage}</AlertDescription>
+                                        <AlertDescription>{el?.longMessage || el.message}</AlertDescription>
                                     </Alert>
                                 ))
                             )}

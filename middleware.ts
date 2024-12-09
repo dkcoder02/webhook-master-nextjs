@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 const publicRoutes = createRouteMatcher(["/", "/api/webhook/register", "/sign-in", "/sign-up"]);
 
-const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
+export const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
 
 export default clerkMiddleware(async (auth, req) => {
     const { userId } = await auth()
