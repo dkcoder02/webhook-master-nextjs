@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
 import { isAuthenticatedUser } from "@/app/helpers/helper";
+import db from "@/app/db";
+import { todos } from "@/app/db/schema";
+import { eq } from "drizzle-orm";
 
 export async function PUT(
     req: NextRequest,
@@ -17,8 +19,8 @@ export async function PUT(
         const { completed } = await req.json();
         const todoId = params.id;
 
-        const todo = await prisma.todo.findUnique({
-            where: { id: todoId },
+        const todo = await db.query.todos.findFirst({
+            where: (todos, { eq }) => eq(todos.id, todoId),
         });
 
         if (!todo) {
@@ -29,10 +31,10 @@ export async function PUT(
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
-        const updatedTodo = await prisma.todo.update({
-            where: { id: todoId },
-            data: { completed },
-        });
+        const updatedTodo = await db.update(todos)
+            .set({ completed: completed })
+            .where(eq(todos.id, todoId))
+            .returning();
 
         return NextResponse.json(updatedTodo);
     } catch (error) {
@@ -55,9 +57,8 @@ export async function DELETE(
         }
 
         const todoId = params.id;
-
-        const todo = await prisma.todo.findUnique({
-            where: { id: todoId },
+        const todo = await db.query.todos.findFirst({
+            where: (todos, { eq }) => eq(todos.id, todoId),
         });
 
         if (!todo) {
@@ -68,9 +69,7 @@ export async function DELETE(
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
-        await prisma.todo.delete({
-            where: { id: todoId },
-        });
+        await db.delete(todos).where(eq(todos.id, todoId))
 
         return NextResponse.json({ message: "Todo deleted successfully" });
     } catch (error) {

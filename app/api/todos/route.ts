@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
 import { isAuthenticatedUser, ITEMS_PER_PAGE } from "@/app/helpers/helper";
+import db from "@/app/db";
+import { todos } from "@/app/db/schema";
+import { and, desc, eq, ilike } from "drizzle-orm";
 
 export async function GET(req: NextRequest) {
     try {
@@ -14,33 +16,25 @@ export async function GET(req: NextRequest) {
         const page = parseInt(searchParams.get("page") || "1");
         const search = searchParams.get("search") || "";
 
-        const todos = await prisma.todo.findMany({
-            where: {
-                userId,
-                title: {
-                    contains: search,
-                    mode: "insensitive",
-                },
-            },
-            orderBy: { createdAt: "desc" },
-            take: ITEMS_PER_PAGE,
-            skip: (page - 1) * ITEMS_PER_PAGE,
-        });
+        const filters = [eq(todos.userId, userId)];
 
-        const totalItems = await prisma.todo.count({
-            where: {
-                userId,
-                title: {
-                    contains: search,
-                    mode: "insensitive",
-                },
-            },
-        });
+        if (search) {
+            filters.push(ilike(todos.title, `%${search}%`));
+        }
 
+        const todoList = await db
+            .select()
+            .from(todos)
+            .where(and(...filters))
+            .orderBy(desc(todos.createdAt))
+            .limit(ITEMS_PER_PAGE)
+            .offset((page - 1) * ITEMS_PER_PAGE);
+
+        const totalItems = (await db.select({ id: todos.id }).from(todos).where(and(...filters))).length
         const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
 
         return NextResponse.json({
-            todos,
+            todos: todoList,
             currentPage: page,
             totalPages,
         });
@@ -60,9 +54,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-            include: { todos: true },
+        const user = await db.query.users.findFirst({
+            where: (users, { eq }) => eq(users.id, userId),
+            with: {
+                todos: true
+            }
         });
 
         if (!user) {
@@ -81,9 +77,7 @@ export async function POST(req: NextRequest) {
 
         const { title } = await req.json();
 
-        const todo = await prisma.todo.create({
-            data: { title, userId },
-        });
+        const todo = await db.insert(todos).values({ title, userId }).returning();
 
         return NextResponse.json(todo, { status: 201 });
     } catch (error) {

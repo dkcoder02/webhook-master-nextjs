@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
 import { isAuthenticatedUser } from "@/app/helpers/helper";
+import db from "@/app/db";
+import { users } from "@/app/db/schema";
+import { eq } from "drizzle-orm";
 
-
-// create subscription
 export async function POST() {
     try {
         const userId = await isAuthenticatedUser();
@@ -12,31 +12,30 @@ export async function POST() {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const user = await prisma.user.findUnique({ where: { id: userId } });
+        const user = await db.query.users.findFirst({
+            where: (users, { eq }) => eq(users.id, userId),
+        });
 
         if (!user) {
             return NextResponse.json({ error: "User not found" }, { status: 404 });
         }
 
-        // payment capture
-
         const subscriptionEnds = new Date();
         subscriptionEnds.setMonth(subscriptionEnds.getMonth() + 1);
 
-        const updatedUser = await prisma.user.update({
-            where: { id: userId },
-            data: {
+        const updatedUser = await db.update(users)
+            .set({
                 isSubscribed: true,
-                subscriptionEnds: subscriptionEnds,
-            },
-        });
+                subscriptionEnds: subscriptionEnds
+            })
+            .where(eq(users.id, userId))
+            .returning();
 
         return NextResponse.json({
             message: "Subscription successful",
-            subscriptionEnds: updatedUser.subscriptionEnds,
+            subscriptionEnds: updatedUser[0].subscriptionEnds,
         });
     } catch (error) {
-        console.error("Error updating subscription:", error);
         return NextResponse.json(
             { error: "Internal server error" },
             { status: 500 }
@@ -44,7 +43,6 @@ export async function POST() {
     }
 }
 
-// fetching subscription status
 export async function GET() {
     try {
         const userId = await isAuthenticatedUser();
@@ -52,9 +50,12 @@ export async function GET() {
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { isSubscribed: true, subscriptionEnds: true },
+        const user = await db.query.users.findFirst({
+            columns: {
+                isSubscribed: true,
+                subscriptionEnds: true
+            },
+            where: (users, { eq }) => eq(users.id, userId)
         });
 
         if (!user) {
@@ -63,10 +64,12 @@ export async function GET() {
 
         const now = new Date();
         if (user.subscriptionEnds && user.subscriptionEnds < now) {
-            await prisma.user.update({
-                where: { id: userId },
-                data: { isSubscribed: false, subscriptionEnds: null },
-            });
+            await db.update(users)
+                .set({
+                    isSubscribed: false,
+                    subscriptionEnds: null
+                })
+                .where(eq(users.id, userId));
             return NextResponse.json({ isSubscribed: false, subscriptionEnds: null });
         }
 
@@ -75,7 +78,6 @@ export async function GET() {
             subscriptionEnds: user.subscriptionEnds,
         });
     } catch (error) {
-        console.error("Error fetching subscription status:", error);
         return NextResponse.json(
             { error: "Internal server error" },
             { status: 500 }

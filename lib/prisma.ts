@@ -1,20 +1,20 @@
-import { PrismaClient } from "@prisma/client";
+// import { PrismaClient } from "@prisma/client";
 
-//TODO: this type of configuration used in ai-saas product and read more postgres-db-prima asscrerat
+// //TODO: this type of configuration used in ai-saas product and read more postgres-db-prima asscrerat
 
-const prismaClientSingleton = () => {
-    return new PrismaClient();
-};
+// const prismaClientSingleton = () => {
+//     return new PrismaClient();
+// };
 
-type PrismaClientSingleton = ReturnType<typeof prismaClientSingleton>;
+// type PrismaClientSingleton = ReturnType<typeof prismaClientSingleton>;
 
-const globalForPrisma = globalThis as unknown as {
-    prisma: PrismaClientSingleton | undefined;
-};
+// const globalForPrisma = globalThis as unknown as {
+//     prisma: PrismaClientSingleton | undefined;
+// };
 
-export const prisma =
-    globalForPrisma.prisma ?? prismaClientSingleton();
+// export const prisma =
+//     globalForPrisma.prisma ?? prismaClientSingleton();
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+// if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 
-export default prisma;
+// export default prisma;

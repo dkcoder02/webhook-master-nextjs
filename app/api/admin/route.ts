@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
 import { isAdmin, isAuthenticatedUser, ITEMS_PER_PAGE } from "@/app/helpers/helper";
+import db from "@/app/db";
+import { todos, users } from "@/app/db/schema";
+import { eq, sql } from "drizzle-orm";
 
 
 export async function GET(req: NextRequest) {
@@ -17,29 +19,37 @@ export async function GET(req: NextRequest) {
 
         let user;
         if (email) {
-            const isValidEmail = await prisma.user.findFirst({
-                where: { email },
-            })
+            const isValidEmail = await db.query.users.findFirst({
+                where: (users, { eq }) => eq(users.email, email)
+            });
 
             if (!isValidEmail) {
                 return NextResponse.json({ error: "Email invalid!" }, { status: 401 });
             }
 
-            user = await prisma.user.findUnique({
-                where: { email },
-                include: {
-                    todos: {
-                        orderBy: { createdAt: "desc" },
-                        take: ITEMS_PER_PAGE,
-                        skip: (page - 1) * ITEMS_PER_PAGE,
-                    },
-                },
+            const correctUser = isValidEmail;
+            const todos = await db.query.todos.findMany({
+                where: (todos, { eq }) => eq(todos.userId, correctUser.id),
+                limit: ITEMS_PER_PAGE,
+                offset: (page - 1) * ITEMS_PER_PAGE,
+                orderBy: (todos, { desc }) => [desc(todos.createdAt)],
             });
+
+            user = { ...correctUser, todos };
         }
 
-        const totalItems = email
-            ? await prisma.todo.count({ where: { User: { email } } })
-            : 0;
+        const safeEmail = email ?? "";
+
+        const todoCount = await db
+            .select({
+                count: sql`COUNT(*)`.as<number>()
+            })
+            .from(todos)
+            .innerJoin(users, eq(users.id, todos.userId))
+            .where(eq(users.email, safeEmail))
+            .then((result) => result[0]?.count || 0);
+
+        const totalItems = todoCount;
         const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
 
         return NextResponse.json({ user, totalPages, currentPage: page });
@@ -59,29 +69,24 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { email, isSubscribed, todoId, todoCompleted, todoTitle } =
-            await req.json();
+        const { email, isSubscribed, todoId, todoCompleted, todoTitle } = await req.json();
 
         if (isSubscribed !== undefined) {
-            await prisma.user.update({
-                where: { email },
-                data: {
-                    isSubscribed,
-                    subscriptionEnds: isSubscribed
-                        ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-                        : null,
-                },
-            });
+            await db.update(users)
+                .set({
+                    isSubscribed: isSubscribed,
+                    subscriptionEnds: isSubscribed ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null
+                })
+                .where(eq(users.email, email))
         }
 
         if (todoId) {
-            await prisma.todo.update({
-                where: { id: todoId },
-                data: {
+            await db.update(todos)
+                .set({
                     completed: todoCompleted !== undefined ? todoCompleted : undefined,
-                    title: todoTitle || undefined,
-                },
-            });
+                    title: todoTitle || undefined
+                })
+                .where(eq(todos.id, todoId))
         }
 
         return NextResponse.json({ message: "Update successful" });
@@ -111,9 +116,7 @@ export async function DELETE(req: NextRequest) {
             );
         }
 
-        await prisma.todo.delete({
-            where: { id: todoId },
-        });
+        await db.delete(todos).where(eq(todos.id, todoId))
 
         return NextResponse.json({ message: "Todo deleted successfully" });
     } catch (error) {
