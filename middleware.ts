@@ -3,10 +3,17 @@ import { NextResponse } from "next/server";
 
 const publicRoutes = createRouteMatcher(["/", "/api/webhook/register", "/sign-in", "/sign-up"]);
 
+
 export const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
 
 export default clerkMiddleware(async (auth, req) => {
+    const url = req.nextUrl;
     const { userId } = await auth()
+    const stripeRoute = "/api/webhook/stripe";
+
+    if (url.pathname === stripeRoute) {
+        return NextResponse.next();
+    }
 
     if (!userId && !publicRoutes(req)) {
         return NextResponse.redirect(new URL("/sign-in", req.url));

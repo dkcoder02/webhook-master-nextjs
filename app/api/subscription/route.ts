@@ -3,6 +3,7 @@ import { isAuthenticatedUser } from "@/app/helpers/helper";
 import db from "@/app/db";
 import { users } from "@/app/db/schema";
 import { eq } from "drizzle-orm";
+import { stripe } from "../webhook/stripe/route";
 
 export async function POST() {
     try {
@@ -20,20 +21,35 @@ export async function POST() {
             return NextResponse.json({ error: "User not found" }, { status: 404 });
         }
 
-        const subscriptionEnds = new Date();
-        subscriptionEnds.setMonth(subscriptionEnds.getMonth() + 1);
+        const url = process.env.APP_BASE_URL;
 
-        const updatedUser = await db.update(users)
-            .set({
-                isSubscribed: true,
-                subscriptionEnds: subscriptionEnds
-            })
-            .where(eq(users.id, userId))
-            .returning();
+        const checkoutSession = await stripe.checkout.sessions.create({
+            mode: "subscription",
+            line_items: [
+                {
+                    price: process.env.STRIPE_SUBSCRIPTION_PRICE_ID,
+                    quantity: 1,
+                },
+            ],
+            success_url: `${url}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${url}/failed-payment`,
+            subscription_data: {
+                metadata: {
+                    userId,
+                },
+            },
+        });
+
+        if (!checkoutSession.url) {
+            return NextResponse.json(
+                { error: "Could not create checkout message" },
+                { status: 500 }
+            );
+        }
 
         return NextResponse.json({
             message: "Subscription successful",
-            subscriptionEnds: updatedUser[0].subscriptionEnds,
+            redirectURL: checkoutSession.url,
         });
     } catch (error) {
         return NextResponse.json(

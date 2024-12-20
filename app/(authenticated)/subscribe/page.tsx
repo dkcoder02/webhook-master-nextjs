@@ -47,13 +47,9 @@ export default function SubscribePage() {
             const response = await fetch("/api/subscription", { method: "POST" });
             if (response.ok) {
                 const data = await response.json();
-                setIsSubscribed(true);
-                setSubscriptionEnds(data.subscriptionEnds);
-                router.refresh();
-                toast({
-                    title: "Success",
-                    description: "You have successfully subscribed!",
-                });
+                if (data?.redirectURL) {
+                    router.replace(data?.redirectURL);
+                }
             } else {
                 const errorData = await response.json();
                 throw new Error(errorData.error || "Failed to subscribe");
