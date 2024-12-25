@@ -27,7 +27,7 @@ export async function POST(
         }
 
         const { isSubscriptionCancelled } = await req.json();
-        const { id: stripeCustomerId } = isActiveSubscription;
+        const { customerId: stripeCustomerId } = isActiveSubscription;
 
         let subscription;
         try {

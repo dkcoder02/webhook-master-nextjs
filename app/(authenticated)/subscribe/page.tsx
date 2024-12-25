@@ -15,6 +15,7 @@ export default function SubscribePage() {
     const [isSubscribed, setIsSubscribed] = useState(false);
     const [subscriptionEnds, setSubscriptionEnds] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isCancel, setIsCancel] = useState(true);
 
     const fetchSubscriptionStatus = useCallback(async () => {
         setIsLoading(true);
@@ -68,6 +69,7 @@ export default function SubscribePage() {
 
     const handleSubscriptionCancel = async (isCancel: boolean) => {
         try {
+            setIsCancel(isCancel);
             const response = await fetch("/api/subscription/stripe", {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ isSubscriptionCancelled: isCancel })
@@ -120,11 +122,11 @@ export default function SubscribePage() {
                                     {new Date(subscriptionEnds!).toLocaleDateString()}
                                 </AlertDescription>
                             </Alert>
-                            <Button onClick={() => handleSubscriptionCancel(true)} className="mt-4">
+                            <Button disabled={isCancel} onClick={() => handleSubscriptionCancel(true)} className="mt-4">
                                 Cancel
                             </Button>
 
-                            <Button onClick={() => handleSubscriptionCancel(false)} className="mt-4">
+                            <Button disabled={!isCancel} onClick={() => handleSubscriptionCancel(false)} className="mt-4">
                                 Resume
                             </Button>
                         </>
