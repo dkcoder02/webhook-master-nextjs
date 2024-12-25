@@ -66,6 +66,38 @@ export default function SubscribePage() {
         }
     };
 
+    const handleSubscriptionCancel = async (isCancel: boolean) => {
+        try {
+            const response = await fetch("/api/subscription/stripe", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ isSubscriptionCancelled: isCancel })
+            });
+            if (response.ok) {
+                const data = await response.json();
+                console.log("data", data);
+                toast({
+                    title: "Success",
+                    description: data.message,
+                });
+
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Failed to cancel subscription");
+            }
+        } catch (error) {
+            console.log("error", error);
+            toast({
+                title: "Error",
+                description:
+                    error instanceof Error
+                        ? error.message
+                        : "An error occurred while cancel subscription. Please try again.",
+                variant: "destructive",
+            });
+        }
+    };
+
+
     if (isLoading) {
         return <div className="flex justify-center items-center">Loading...</div>;
     }
@@ -80,13 +112,22 @@ export default function SubscribePage() {
                 </CardHeader>
                 <CardContent>
                     {isSubscribed ? (
-                        <Alert>
-                            <CheckCircle className="h-4 w-4" />
-                            <AlertDescription>
-                                You are a subscribed user. Subscription ends on{" "}
-                                {new Date(subscriptionEnds!).toLocaleDateString()}
-                            </AlertDescription>
-                        </Alert>
+                        <>
+                            <Alert>
+                                <CheckCircle className="h-4 w-4" />
+                                <AlertDescription>
+                                    You are a subscribed user. Subscription ends on{" "}
+                                    {new Date(subscriptionEnds!).toLocaleDateString()}
+                                </AlertDescription>
+                            </Alert>
+                            <Button onClick={() => handleSubscriptionCancel(true)} className="mt-4">
+                                Cancel
+                            </Button>
+
+                            <Button onClick={() => handleSubscriptionCancel(false)} className="mt-4">
+                                Resume
+                            </Button>
+                        </>
                     ) : (
                         <>
                             <Alert variant="destructive">
