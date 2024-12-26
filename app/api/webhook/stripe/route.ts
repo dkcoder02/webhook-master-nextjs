@@ -27,10 +27,6 @@ export async function POST(req: NextRequest) {
 
         const event = stripe.webhooks.constructEvent(buffer, signature, WEBHOOK_SECRET!);
 
-        console.log(`Received event: ${event.type}`);
-
-        // if (event.type === "checkout.session.completed") {}
-
         if (event.type === "customer.subscription.created") {
             const subscription = event.data.object;
             const userId = subscription.metadata.userId;
@@ -97,41 +93,40 @@ export async function POST(req: NextRequest) {
             const { status, metadata, id } = event.data.object;
             const userId = metadata.userId;
 
-            console.log("Subscription deleted", userId);
+            if (status === "canceled") {
+                const user = await db.query.users.findFirst({
+                    columns: {
+                        isSubscribed: true,
+                        subscriptionEnds: true
+                    },
+                    where: (users, { eq }) => eq(users.id, userId)
+                });
 
-            const user = await db.query.users.findFirst({
-                columns: {
-                    isSubscribed: true,
-                    subscriptionEnds: true
-                },
-                where: (users, { eq }) => eq(users.id, userId)
-            });
+                if (!user) {
+                    return NextResponse.json({ error: "User not found" }, { status: 404 });
+                }
 
-            if (!user) {
-                return NextResponse.json({ error: "User not found" }, { status: 404 });
-            }
+                const now = new Date();
+                if (user.subscriptionEnds && user.subscriptionEnds <= now) {
+                    await db.update(users)
+                        .set({
+                            isSubscribed: false,
+                            subscriptionEnds: null
+                        })
+                        .where(eq(users.id, userId));
+                }
 
-            const now = new Date();
-            if (user.subscriptionEnds && user.subscriptionEnds < now) {
-                await db.update(users)
+                await db.update(stripeSubscriptions)
                     .set({
-                        isSubscribed: false,
-                        subscriptionEnds: null
+                        status,
                     })
-                    .where(eq(users.id, userId));
+                    .where(eq(stripeSubscriptions.id, id) && eq(stripeSubscriptions.userId, userId!));
+
             }
-
-            await db.update(stripeSubscriptions)
-                .set({
-                    status: "inActive",
-                })
-                .where(eq(stripeSubscriptions.id, id) && eq(stripeSubscriptions.userId, userId!));
-
-            console.log("status", status)
         }
 
+        // subscription resumed
         if (event.type === "customer.subscription.updated") {
-            console.log("Subscription updated");
             const { status, metadata, id } = event.data.object;
             const userId = metadata.userId;
             if (status === "active") {
@@ -141,7 +136,6 @@ export async function POST(req: NextRequest) {
                     })
                     .where(eq(stripeSubscriptions.id, id) && eq(stripeSubscriptions.userId, userId!));
             }
-            console.log("status", status)
         }
         return NextResponse.json({ message: "Stripe webhook received" }, { status: 200 });
     } catch (err: any) {
